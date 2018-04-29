@@ -293,11 +293,11 @@ function runAnimServer(port::Int)
 	
 	# create and run server
 	onepage = readstring("$sourcePath/animation/index.html")
-	httph = HttpHandler() do req::Request, res::Response
-		Response(onepage)
-	end
-	server = Server(httph, wsh)
-	@async run(server, port)
+	@app httphApp = (Mux.defaults,
+		page(respond(onepage)),
+		Mux.notfound())
+	serve(Server(Mux.http_handler(httphApp), wsh), port)
+	
 	animPort = port
 	println("opened port $animPort, use this for subsequent animation windows")
 	return true

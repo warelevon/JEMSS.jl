@@ -380,16 +380,51 @@
 		}
 		
 		////////////////////////////////////////////////////////////////
-		// ambulances
+		// icons
 		
-		/*
+		var iconCommonUrl = "/pkg/JEMSS/animation/icons/"; // actual path is JEMSS/assets/animation/icons/
+		
 		var ambulanceIcon = L.icon({
-			iconUrl: 'ambulance_icon.png',
+			iconUrl: iconCommonUrl + "ambulance.png",
 			iconSize:     [15, 15],
 			iconAnchor:   [8, 8],
 			popupAnchor:  [0, 0]
 		});
-		*/
+		
+		function callCommonIcon(name) {
+			return L.icon({
+				iconUrl: iconCommonUrl + name + ".png",
+				iconSize:     [11, 11],
+				iconAnchor:   [6, 6],
+				popupAnchor:  [0, 0]
+			});
+		}
+		var callLowIcon = callCommonIcon("call_low");
+		var callMedIcon = callCommonIcon("call_med");
+		var callHighIcon = callCommonIcon("call_high");
+		
+		var hospitalIcon = L.icon({
+			iconUrl: iconCommonUrl + "hospital.png",
+			iconSize:     [19, 19],
+			iconAnchor:   [10, 10],
+			popupAnchor:  [0, 0]
+		});
+		
+		var stationIcon = L.icon({
+			iconUrl: iconCommonUrl + "station.png",
+			iconSize:     [19, 19],
+			iconAnchor:   [10, 10],
+			popupAnchor:  [0, 0]
+		});
+		
+		function markerIcon(icon, lat, lon, popup) {
+			return L.marker([lat, lon],
+					{icon: icon}
+				).addTo(map).bindPopup(popup);
+		}
+		
+		////////////////////////////////////////////////////////////////
+		// ambulances
 		
 		var ambs = []
 		
@@ -399,7 +434,7 @@
 		
 		function ambulance(id, lat, lon) {
 			this.id = id;
-			this.marker = circleMarker(lat, lon, 130, '#0b0', 0.9, "Ambulance " + id)
+			this.marker = markerIcon(ambulanceIcon, lat, lon, "Ambulance " + id);
 		}
 		
 		function moveAmb(id, lat, lon) {
@@ -437,15 +472,15 @@
 			this.id = id;
 			markerColor = 'white'
 			if (priority == "highPriority") {
-				markerColor = 'purple'
+				callIcon = callHighIcon
 			} else if (priority == "medPriority") {
-				markerColor = 'red'
+				callIcon = callMedIcon
 			} else if (priority == "lowPriority") {
-				markerColor = 'orange'
+				callIcon = callLowIcon
 			} else {
 				throw new Error("Undefined call priority: " + priority)
 			}
-			this.marker = circleMarker(lat, lon, 60, markerColor, 1, "Call " + id)
+			this.marker = markerIcon(callIcon, lat, lon, "Call " + id);
 		}
 		
 		function moveCall(id, lat, lon) {
@@ -497,7 +532,7 @@
 		
 		function hospital(id, lat, lon) {
 			this.id = id;
-			this.marker = circleMarker(lat, lon, 200, 'blue', 0.9, "Hospital " + id)
+			this.marker = markerIcon(hospitalIcon, lat, lon, "Hospital " + id);
 		}
 		
 		////////////////////////////////////////////////////////////////
@@ -511,7 +546,7 @@
 		
 		function station(id, lat, lon) {
 			this.id = id;
-			this.marker = circleMarker(lat, lon, 200, 'black', 0.9, "Station " + id)
+			this.marker = markerIcon(stationIcon, lat, lon, "Station " + id);
 		}
 		
 		////////////////////////////////////////////////////////////////
