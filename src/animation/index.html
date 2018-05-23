@@ -32,8 +32,7 @@
 			padding-right: 15px;
 			z-index: 1;
 		}
-		.legend div span {
-			border-radius: 50%;
+		.legend div img {
 			display: inline-block;
 			height: 10px;
 			margin-right: 5px;
@@ -70,13 +69,13 @@
 	<div id="map_id" class="map"></div>
 	<div id="map_legend" class="legend">
 		<div><h3>Legend</h3></div>
-		<div><span style='background-color: #0b0'></span>ambulance</div>
-		<div><span style='background-color: blue'></span>hospital</div>
-		<div><span style='background-color: black'></span>station</div>
+		<div><img id="image_ambulance"/>ambulance</div>
+		<div><img id="image_hospital"/>hospital</div>
+		<div><img id="image_station"/>station</div>
 		<div>call priorities:</div>
-		<div><span style='background-color: purple'></span>high</div>
-		<div><span style='background-color: red'></span>medium</div>
-		<div><span style='background-color: orange'></span>low</div>
+		<div><img id="image_call_high"/>high</div>
+		<div><img id="image_call_medium"/>medium</div>
+		<div><img id="image_call_low"/>low</div>
 	</div>
 	<div id="menu" class="menu">
 		<div align="center">
@@ -422,6 +421,17 @@
 					{icon: icon}
 				).addTo(map).bindPopup(popup);
 		}
+		
+		function setImgSrcToIconUrl(imgId, icon) {
+			var elt = document.getElementById(imgId);
+			elt.src = icon.options.iconUrl
+		}
+		setImgSrcToIconUrl("image_ambulance", ambulanceIcon)
+		setImgSrcToIconUrl("image_call_low", callLowIcon)
+		setImgSrcToIconUrl("image_call_medium", callMedIcon)
+		setImgSrcToIconUrl("image_call_high", callHighIcon)
+		setImgSrcToIconUrl("image_hospital", hospitalIcon)
+		setImgSrcToIconUrl("image_station", stationIcon)
 		
 		////////////////////////////////////////////////////////////////
 		// ambulances
