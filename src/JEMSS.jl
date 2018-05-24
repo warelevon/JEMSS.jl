@@ -5,7 +5,6 @@ module JEMSS
 using HttpServer
 using WebSockets
 using JSON
-using Mux # does not use precompile
 
 # files
 using LightXML

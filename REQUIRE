@@ -9,7 +9,6 @@ JSON
 JuMP
 LightGraphs
 LightXML
-Mux
 Plots
 Stats
 StatsFuns
