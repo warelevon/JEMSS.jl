@@ -36,6 +36,17 @@ function writeClient!(client::WebSocket, messageDict::Dict, message::String)
 	write(client, json(messageDict))
 end
 
+# set icons for ambulances, hospitals, etc.
+function animSetIconUrls(client::WebSocket)
+	messageDict = createMessageDict("set_icon_urls")
+	pngFileUrl(filename) = string("data:image/png;base64,", filename |> read |> base64encode)
+	iconPath = joinpath(@__DIR__, "..", "..", "assets", "animation", "icons")
+	for icon in ["ambulance", "call_low", "call_med", "call_high", "hospital", "station"]
+		messageDict[icon] = pngFileUrl(joinpath(iconPath, string(icon, ".png")))
+	end
+	write(client, json(messageDict))
+end
+
 # adds nodes from fGraph
 function animAddNodes(client::WebSocket, nodes::Vector{Node})
 	messageDict = createMessageDict("add_node")
@@ -213,6 +224,7 @@ wsh = WebSocketHandler() do req::Request, client::WebSocket
 	messageDict["time"] = sim.startTime
 	write(client, json(messageDict))
 	
+	animSetIconUrls(client) # set icons before adding items to map
 	animAddNodes(client, sim.net.fGraph.nodes)
 	animAddArcs(client, sim.net) # add first, should be underneath other objects
 	animSetArcSpeeds(client, sim.map, sim.net)

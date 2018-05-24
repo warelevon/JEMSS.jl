@@ -125,6 +125,10 @@
 				case "set_start_time":
 					setSimStartTime(msgObj.time)
 					break;
+				case "set_icon_urls":
+					delete msgObj.message
+					setIconUrls(msgObj)
+					break;
 				case "add_node":
 					var node = msgObj.node
 					var loc = node.location
@@ -381,57 +385,70 @@
 		////////////////////////////////////////////////////////////////
 		// icons
 		
-		var iconCommonUrl = "/pkg/JEMSS/animation/icons/"; // actual path is JEMSS/assets/animation/icons/
+		var iconUrls = {}
+		function setIconUrls(iconUrlsObj) {
+			iconUrls = iconUrlsObj;
+			setIcons();
+		}
 		
-		var ambulanceIcon = L.icon({
-			iconUrl: iconCommonUrl + "ambulance.png",
-			iconSize:     [15, 15],
-			iconAnchor:   [8, 8],
-			popupAnchor:  [0, 0]
-		});
-		
-		function callCommonIcon(name) {
-			return L.icon({
-				iconUrl: iconCommonUrl + name + ".png",
-				iconSize:     [11, 11],
-				iconAnchor:   [6, 6],
+		var icons = {}
+		function setIcons() {
+			// ambulance
+			icons.ambulance = L.icon({
+				iconUrl: iconUrls["ambulance"],
+				iconSize:     [15, 15],
+				iconAnchor:   [8, 8],
 				popupAnchor:  [0, 0]
 			});
-		}
-		var callLowIcon = callCommonIcon("call_low");
-		var callMedIcon = callCommonIcon("call_med");
-		var callHighIcon = callCommonIcon("call_high");
-		
-		var hospitalIcon = L.icon({
-			iconUrl: iconCommonUrl + "hospital.png",
-			iconSize:     [19, 19],
-			iconAnchor:   [10, 10],
-			popupAnchor:  [0, 0]
-		});
-		
-		var stationIcon = L.icon({
-			iconUrl: iconCommonUrl + "station.png",
-			iconSize:     [19, 19],
-			iconAnchor:   [10, 10],
-			popupAnchor:  [0, 0]
-		});
-		
-		function markerIcon(icon, lat, lon, popup) {
-			return L.marker([lat, lon],
-					{icon: icon}
-				).addTo(map).bindPopup(popup);
+			
+			// calls
+			function callCommonIcon(name) {
+				return L.icon({
+					iconUrl: iconUrls[name],
+					iconSize:     [11, 11],
+					iconAnchor:   [6, 6],
+					popupAnchor:  [0, 0]
+				});
+			}
+			icons.call_low = callCommonIcon("call_low");
+			icons.call_med = callCommonIcon("call_med");
+			icons.call_high = callCommonIcon("call_high");
+			
+			// hospital
+			icons.hospital = L.icon({
+				iconUrl: iconUrls["hospital"],
+				iconSize:     [19, 19],
+				iconAnchor:   [10, 10],
+				popupAnchor:  [0, 0]
+			});
+			
+			// station
+			icons.station = L.icon({
+				iconUrl: iconUrls["station"],
+				iconSize:     [19, 19],
+				iconAnchor:   [10, 10],
+				popupAnchor:  [0, 0]
+			});
+			
+			// set images in map legend
+			setImgSrcToIconUrl("image_ambulance", icons.ambulance)
+			setImgSrcToIconUrl("image_call_low", icons.call_low)
+			setImgSrcToIconUrl("image_call_medium", icons.call_med)
+			setImgSrcToIconUrl("image_call_high", icons.call_high)
+			setImgSrcToIconUrl("image_hospital", icons.hospital)
+			setImgSrcToIconUrl("image_station", icons.station)
 		}
 		
 		function setImgSrcToIconUrl(imgId, icon) {
 			var elt = document.getElementById(imgId);
 			elt.src = icon.options.iconUrl
 		}
-		setImgSrcToIconUrl("image_ambulance", ambulanceIcon)
-		setImgSrcToIconUrl("image_call_low", callLowIcon)
-		setImgSrcToIconUrl("image_call_medium", callMedIcon)
-		setImgSrcToIconUrl("image_call_high", callHighIcon)
-		setImgSrcToIconUrl("image_hospital", hospitalIcon)
-		setImgSrcToIconUrl("image_station", stationIcon)
+		
+		function markerIcon(icon, lat, lon, popup) {
+			return L.marker([lat, lon],
+					{icon: icon}
+				).addTo(map).bindPopup(popup);
+		}
 		
 		////////////////////////////////////////////////////////////////
 		// ambulances
@@ -444,7 +461,7 @@
 		
 		function ambulance(id, lat, lon) {
 			this.id = id;
-			this.marker = markerIcon(ambulanceIcon, lat, lon, "Ambulance " + id);
+			this.marker = markerIcon(icons.ambulance, lat, lon, "Ambulance " + id);
 		}
 		
 		function moveAmb(id, lat, lon) {
@@ -482,11 +499,11 @@
 			this.id = id;
 			markerColor = 'white'
 			if (priority == "highPriority") {
-				callIcon = callHighIcon
+				callIcon = icons.call_high
 			} else if (priority == "medPriority") {
-				callIcon = callMedIcon
+				callIcon = icons.call_med
 			} else if (priority == "lowPriority") {
-				callIcon = callLowIcon
+				callIcon = icons.call_low
 			} else {
 				throw new Error("Undefined call priority: " + priority)
 			}
@@ -542,7 +559,7 @@
 		
 		function hospital(id, lat, lon) {
 			this.id = id;
-			this.marker = markerIcon(hospitalIcon, lat, lon, "Hospital " + id);
+			this.marker = markerIcon(icons.hospital, lat, lon, "Hospital " + id);
 		}
 		
 		////////////////////////////////////////////////////////////////
@@ -556,7 +573,7 @@
 		
 		function station(id, lat, lon) {
 			this.id = id;
-			this.marker = markerIcon(stationIcon, lat, lon, "Station " + id);
+			this.marker = markerIcon(icons.station, lat, lon, "Station " + id);
 		}
 		
 		////////////////////////////////////////////////////////////////
