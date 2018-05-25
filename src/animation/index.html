@@ -108,6 +108,11 @@
 			map.fitBounds(mapBounds);
 		}
 		
+		map.on('zoomend', function() {
+			setIconSizes();
+			setMarkerIcons();
+		})
+		
 		////////////////////////////////////////////////////////////////
 		// websocket connection
 		
@@ -393,42 +398,12 @@
 		
 		var icons = {}
 		function setIcons() {
-			// ambulance
-			icons.ambulance = L.icon({
-				iconUrl: iconUrls["ambulance"],
-				iconSize:     [15, 15],
-				iconAnchor:   [8, 8],
-				popupAnchor:  [0, 0]
-			});
-			
-			// calls
-			function callCommonIcon(name) {
-				return L.icon({
-					iconUrl: iconUrls[name],
-					iconSize:     [11, 11],
-					iconAnchor:   [6, 6],
-					popupAnchor:  [0, 0]
+			for (icon in iconUrls) {
+				icons[icon] = L.icon({
+					iconUrl: iconUrls[icon],
+					popupAnchor: [0,0]
 				});
 			}
-			icons.call_low = callCommonIcon("call_low");
-			icons.call_med = callCommonIcon("call_med");
-			icons.call_high = callCommonIcon("call_high");
-			
-			// hospital
-			icons.hospital = L.icon({
-				iconUrl: iconUrls["hospital"],
-				iconSize:     [19, 19],
-				iconAnchor:   [10, 10],
-				popupAnchor:  [0, 0]
-			});
-			
-			// station
-			icons.station = L.icon({
-				iconUrl: iconUrls["station"],
-				iconSize:     [19, 19],
-				iconAnchor:   [10, 10],
-				popupAnchor:  [0, 0]
-			});
 			
 			// set images in map legend
 			setImgSrcToIconUrl("image_ambulance", icons.ambulance)
@@ -437,6 +412,9 @@
 			setImgSrcToIconUrl("image_call_high", icons.call_high)
 			setImgSrcToIconUrl("image_hospital", icons.hospital)
 			setImgSrcToIconUrl("image_station", icons.station)
+			
+			setIconSizes();
+			setMarkerIcons();
 		}
 		
 		function setImgSrcToIconUrl(imgId, icon) {
@@ -448,6 +426,43 @@
 			return L.marker([lat, lon],
 					{icon: icon}
 				).addTo(map).bindPopup(popup);
+		}
+		
+		function setIconSizes() {
+			function quad(x, a, b, c) {
+				return a*x*x + b*x + c
+			}
+			var x = map.getZoom();
+			setIconSize(icons.ambulance, quad(x, 0.1, 0, 3))
+			setIconSize(icons.call_low, quad(x, 0.08, 0, 1))
+			setIconSize(icons.call_med, quad(x, 0.08, 0, 1))
+			setIconSize(icons.call_high, quad(x, 0.08, 0, 1))
+			setIconSize(icons.hospital, quad(x, 0.125, 0, 5))
+			setIconSize(icons.station, quad(x, 0.125, 0, 5))
+		}
+		
+		function setIconSize(icon, approxSize) {
+			var anchor = Math.round((approxSize+1)/2);
+			var size = anchor * 2 - 1; // make size odd, centred around anchor
+			icon.options.iconSize = [size, size];
+			icon.options.iconAnchor = [anchor, anchor];
+		}
+		
+		function setMarkerIcons() {
+			// set icons of existing markers
+			for (i in ambs) {
+				ambs[i].marker.setIcon(icons.ambulance);
+			}
+			for (i in calls) {
+				callIcon = icons[calls[i].iconName];
+				calls[i].marker.setIcon(callIcon);
+			}
+			for (i in hospitals) {
+				hospitals[i].marker.setIcon(icons.hospital);
+			}
+			for (i in stations) {
+				stations[i].marker.setIcon(icons.station);
+			}
 		}
 		
 		////////////////////////////////////////////////////////////////
@@ -497,16 +512,17 @@
 		
 		function call(id, lat, lon, priority) {
 			this.id = id;
-			markerColor = 'white'
+			this.iconName = "";
 			if (priority == "highPriority") {
-				callIcon = icons.call_high
+				this.iconName = "call_high"
 			} else if (priority == "medPriority") {
-				callIcon = icons.call_med
+				this.iconName = "call_med"
 			} else if (priority == "lowPriority") {
-				callIcon = icons.call_low
+				this.iconName = "call_low"
 			} else {
 				throw new Error("Undefined call priority: " + priority)
 			}
+			callIcon = icons[this.iconName]
 			this.marker = markerIcon(callIcon, lat, lon, "Call " + id);
 		}
 		
