@@ -74,7 +74,7 @@
 		<div><img id="image_station"/>station</div>
 		<div>call priorities:</div>
 		<div><img id="image_call_high"/>high</div>
-		<div><img id="image_call_medium"/>medium</div>
+		<div><img id="image_call_med"/>medium</div>
 		<div><img id="image_call_low"/>low</div>
 	</div>
 	<div id="menu" class="menu">
@@ -398,28 +398,22 @@
 		
 		var icons = {}
 		function setIcons() {
-			for (icon in iconUrls) {
-				icons[icon] = L.icon({
-					iconUrl: iconUrls[icon],
+			for (iconName in iconUrls) {
+				icons[iconName] = L.icon({
+					iconUrl: iconUrls[iconName],
 					popupAnchor: [0,0]
 				});
+				
+				setImgSrcToIconUrl("image_" + iconName, iconUrls[iconName]); // set image in map legend
 			}
-			
-			// set images in map legend
-			setImgSrcToIconUrl("image_ambulance", icons.ambulance)
-			setImgSrcToIconUrl("image_call_low", icons.call_low)
-			setImgSrcToIconUrl("image_call_medium", icons.call_med)
-			setImgSrcToIconUrl("image_call_high", icons.call_high)
-			setImgSrcToIconUrl("image_hospital", icons.hospital)
-			setImgSrcToIconUrl("image_station", icons.station)
 			
 			setIconSizes();
 			setMarkerIcons();
 		}
 		
-		function setImgSrcToIconUrl(imgId, icon) {
+		function setImgSrcToIconUrl(imgId, iconUrl) {
 			var elt = document.getElementById(imgId);
-			elt.src = icon.options.iconUrl
+			elt.src = iconUrl
 		}
 		
 		function markerIcon(icon, lat, lon, popup) {
