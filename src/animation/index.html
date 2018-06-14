@@ -34,9 +34,9 @@
 		}
 		.legend div img {
 			display: inline-block;
-			height: 10px;
+			height: 15px;
 			margin-right: 5px;
-			width: 10px;
+			width: 15px;
 		}
 		.menu {
 			bottom: 30px;
@@ -112,6 +112,10 @@
 			setIconSizes();
 			setMarkerIcons();
 		})
+		
+		// remove custom marker drifting when zooming
+		map.options.markerZoomAnimation = false // result appears same as setting map.options.zoomAnimation = false
+		//map.options.zoomAnimationThreshold = 0 // removes all zoom animation, but flashes white between levels
 		
 		////////////////////////////////////////////////////////////////
 		// websocket connection
@@ -436,6 +440,9 @@
 		}
 		
 		function setIconSize(icon, approxSize) {
+			if (icon.options == undefined) {
+				return;
+			}
 			var anchor = Math.round((approxSize+1)/2);
 			var size = anchor * 2 - 1; // make size odd, centred around anchor
 			icon.options.iconSize = [size, size];
