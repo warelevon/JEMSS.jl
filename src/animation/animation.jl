@@ -190,8 +190,9 @@ end
 wsh = WebSocketHandler() do req::Request, client::WebSocket
 	global animConnections, animConfigFilenames
 	
-	animConnections[client.id] = client
-	println("Client ", client.id, " connected")
+	id = isempty(animConnections) ? 1 : maximum(keys(animConnections))
+	animConnections[id] = client
+	println("Client ", id, " connected")
 	
 	# get oldest filename from animConfigFilenames, or select file now
 	configFilename = (length(animConfigFilenames) > 0 ? shift!(animConfigFilenames) : selectXmlFile())
@@ -258,7 +259,7 @@ wsh = WebSocketHandler() do req::Request, client::WebSocket
 			
 		elseif msgType == "disconnect"
 			close(client)
-			println("Client ", client.id, " disconnected")
+			println("Client ", id, " disconnected")
 			break
 		else
 			error("Unrecognised message: ", msgString)
