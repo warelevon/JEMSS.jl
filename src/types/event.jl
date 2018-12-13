@@ -1,3 +1,18 @@
+##########################################################################
+# Copyright 2017 Samuel Ridler.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+##########################################################################
+
 # add new event to list, maintain sorting by time
 function addEvent!(eventList::Vector{Event};
 	parentEvent::Event = Event(), form::EventForm = nullEvent, time::Float = nullTime, ambulance::Ambulance = Ambulance(), call::Call = Call(), addEventToAmb::Bool = true)
@@ -22,9 +37,9 @@ function addEvent!(eventList::Vector{Event};
 	if checkMode
 		# check time ordering of events
 		for i = 1:length(eventList)-1
-			assert(eventList[i].time >= eventList[i+1].time)
+			@assert(eventList[i].time >= eventList[i+1].time)
 		end
-		# assert(issorted(eventList, by = e -> e.time, rev = true)) # slow
+		# @assert(issorted(eventList, by = e -> e.time, rev = true)) # slow
 	end
 	
 	return event
@@ -51,7 +66,7 @@ end
 # delete event in eventList
 function deleteEvent!(eventList::Vector{Event}, event::Event)
 	i = findfirst(e -> e == event, eventList)
-	assert(i != 0)
-	assert(findnext(e -> e == event, eventList, i + 1) == 0)
+	@assert(i != 0)
+	@assert(findnext(e -> e == event, eventList, i + 1) == 0)
 	deleteat!(eventList, i)
 end

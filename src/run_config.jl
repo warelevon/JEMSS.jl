@@ -1,7 +1,22 @@
+##########################################################################
+# Copyright 2017 Samuel Ridler.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+##########################################################################
+
 # run configuration xml file
 function runConfig(configFilename::String)
 	# read input files, initialise simulation
-	sim = initSimulation(configFilename; allowResim = true, createBackup = false, allowWriteOutput = true)
+	sim = initSim(configFilename; allowResim = true, createBackup = false, allowWriteOutput = true)
 	
 	# open output files
 	openOutputFiles!(sim)
@@ -19,8 +34,8 @@ function runConfig(configFilename::String)
 end
 
 # initialise simulation from input files
-function initSimulation(configFilename::String;
-	allowResim::Bool = false, createBackup::Bool = true, allowWriteOutput::Bool = false)
+function initSim(configFilename::String;
+	allowResim::Bool = false, createBackup::Bool = true, allowWriteOutput::Bool = false, doPrint::Bool = true)
 	
 	# read sim config xml file
 	rootElt = xmlFileRoot(configFilename)
@@ -28,8 +43,8 @@ function initSimulation(configFilename::String;
 	
 	# for progress messages:
 	t = Vector{Float}(1)
-	initMessage(t, msg) = (t[1] = time(); print(msg))
-	initTime(t) = println(": ", round(time() - t[1], 2), " seconds")
+	initMessage(t, msg) = doPrint && (t[1] = time(); print(msg))
+	initTime(t) = doPrint && println(": ", round(time() - t[1], 2), " seconds")
 	
 	##################
 	# sim config
@@ -39,6 +54,8 @@ function initSimulation(configFilename::String;
 	sim = Simulation()
 	sim.configRootElt = rootElt
 	
+	joinPathIfNotAbs(absPath::String, path::String) = isabspath(path) ? path : joinpath(absPath, path)
+	
 	# input
 	sim.inputPath = abspath(eltContentInterpVal(rootElt, "inputPath"))
 	simFilesElt = findElt(rootElt, "simFiles")
@@ -46,8 +63,8 @@ function initSimulation(configFilename::String;
 	sim.inputFiles = Dict{String,File}()
 	for inputFile in inputFiles
 		file = File()
-		file.name = eltContent(simFilesElt, inputFile)
-		file.path = joinpath(sim.inputPath, file.name)
+		file.path = joinPathIfNotAbs(sim.inputPath, eltContent(simFilesElt, inputFile))
+		file.name = splitdir(file.path)[2]
 		if inputFile != "rNetTravels" # do not need checksum of rNetTravels file
 			file.checksum = fileChecksum(file.path)
 		end
@@ -62,8 +79,8 @@ function initSimulation(configFilename::String;
 	sim.outputFiles = Dict{String,File}()
 	for outputFile in outputFiles
 		file = File()
-		file.name = eltContent(outputFilesElt, outputFile)
-		file.path = joinpath(sim.outputPath, file.name)
+		file.path = joinPathIfNotAbs(sim.outputPath, eltContent(outputFilesElt, outputFile))
+		file.name = splitdir(file.path)[2]
 		sim.outputFiles[outputFile] = file
 	end
 	
@@ -82,6 +99,11 @@ function initSimulation(configFilename::String;
 	sim.time = sim.startTime
 	sim.hospitals = readHospitalsFile(simFilePath("hospitals"))
 	sim.stations = readStationsFile(simFilePath("stations"))
+	
+	sim.numAmbs = length(sim.ambulances)
+	sim.numCalls = length(sim.calls)
+	sim.numHospitals = length(sim.hospitals)
+	sim.numStations = length(sim.stations)
 	
 	# read network data
 	sim.net = Network()
@@ -108,8 +130,12 @@ function initSimulation(configFilename::String;
 	# read misc
 	sim.map = readMapFile(simFilePath("map"))
 	map = sim.map # shorthand
-	sim.targetResponseTimes = readPrioritiesFile(simFilePath("priorities"))
+	(sim.targetResponseTimes, sim.responseTravelPriorities) = readPrioritiesFile(simFilePath("priorities"))
 	sim.travel = readTravelFile(simFilePath("travel"))
+	# "demand" file can be slow to read, will not read here but read elsewhere when needed
+	if haskey(sim.inputFiles, "demandCoverage")
+		sim.demandCoverage = readDemandCoverageFile(simFilePath("demandCoverage"))
+	end
 	
 	initTime(t)
 	
@@ -131,20 +157,20 @@ function initSimulation(configFilename::String;
 	initMessage(t, "creating rGraph from fGraph")
 	createRGraphFromFGraph!(net)
 	initTime(t)
-	println("fNodes: ", length(net.fGraph.nodes), ", rNodes: ", length(net.rGraph.nodes))
+	doPrint && println("fNodes: ", length(net.fGraph.nodes), ", rNodes: ", length(net.rGraph.nodes))
 	
 	initMessage(t, "checking rGraph")
 	checkGraph(net.rGraph, map)
 	initTime(t)
 	
 	if rNetTravelsLoaded != []
-		println("using data from rNetTravels file")
+		doPrint && println("using data from rNetTravels file")
 		try
 			initMessage(t, "creating rNetTravels from fNetTravels")
 			createRNetTravelsFromFNetTravels!(net; rNetTravelsLoaded = rNetTravelsLoaded)
 			initTime(t)
 		catch
-			println()
+			doPrint && println()
 			warn("failed to use data from rNetTravels file")
 			rNetTravelsLoaded = []
 			rNetTravelsFilename = ""
@@ -167,8 +193,8 @@ function initSimulation(configFilename::String;
 	initMessage(t, "initialising travel")
 	
 	travel = sim.travel # shorthand
-	assert(travel.setsStartTimes[1] <= sim.startTime)
-	assert(length(net.fNetTravels) == travel.numModes)
+	@assert(travel.setsStartTimes[1] <= sim.startTime)
+	@assert(length(net.fNetTravels) == travel.numModes)
 	for travelMode in travel.modes
 		travelMode.fNetTravel = net.fNetTravels[travelMode.index]
 		travelMode.rNetTravel = net.rNetTravels[travelMode.index]
@@ -194,14 +220,14 @@ function initSimulation(configFilename::String;
 	gridPlaceNodes!(map, grid, fGraph.nodes)
 	initTime(t)
 	
-	println("nodes: ", length(fGraph.nodes), ", grid size: ", nx, " x ", ny)
+	doPrint && println("nodes: ", length(fGraph.nodes), ", grid size: ", nx, " x ", ny)
 	
 	##################
 	# sim - ambulances, calls, hospitals, stations...
 	
 	initMessage(t, "adding ambulances, calls, etc")
 	
-	# for each call, hospital, and station, find neareset node
+	# for each call, hospital, and station, find nearest node
 	for c in sim.calls
 		(c.nearestNodeIndex, c.nearestNodeDist) = findNearestNodeInGrid(map, grid, fGraph.nodes, c.location)
 	end
@@ -247,7 +273,7 @@ function initSimulation(configFilename::String;
 			minTime = Inf
 			nearestHospitalIndex = nullIndex
 			for hospital in sim.hospitals
-				(travelTime, rNodes) = shortestPathTravelTime(net, travelModeIndex, node.index, hospital.nearestNodeIndex)
+				travelTime = shortestPathTravelTime(net, travelModeIndex, node.index, hospital.nearestNodeIndex)
 				travelTime += offRoadTravelTime(travelMode, hospital.nearestNodeDist)
 				if travelTime < minTime
 					minTime = travelTime
@@ -275,7 +301,7 @@ function initSimulation(configFilename::String;
 	if moveUpModuleName == "none"
 		mud.useMoveUp = false
 		mud.moveUpModule = nullMoveUpModule
-		println("not using move up")
+		doPrint && println("not using move up")
 	else
 		initMessage(t, "initialising move up")
 		
@@ -284,32 +310,35 @@ function initSimulation(configFilename::String;
 		if moveUpModuleName == "comp_table"
 			mud.moveUpModule = compTableModule
 			compTableElt = findElt(moveUpElt, "compTable")
-			compTableFilename = eltContent(compTableElt, "filename")
-			initCompTable!(sim, joinpath(sim.inputPath, compTableFilename))
+			compTableFilename = joinPathIfNotAbs(sim.inputPath, eltContent(compTableElt, "filename"))
+			initCompTable!(sim, compTableFilename)
 			
 		elseif moveUpModuleName == "dmexclp"
 			mud.moveUpModule = dmexclpModule
 			dmexclpElt = findElt(moveUpElt, "dmexclp")
-			initDmexclp!(sim;
-				coverTime = eltContentVal(dmexclpElt, "coverTime"),
-				coverTravelPriority = eltContentVal(dmexclpElt, "coverTravelPriority"),
-				busyFraction = eltContentVal(dmexclpElt, "busyFraction"),
-				demandRasterFilename = eltContent(dmexclpElt, "demandRasterFilename"))
+			initDmexclp!(sim; busyFraction = eltContentVal(dmexclpElt, "busyFraction"))
 			
 		elseif moveUpModuleName == "priority_list"
 			mud.moveUpModule = priorityListModule
 			priorityListElt = findElt(moveUpElt, "priorityList")
-			priorityListFilename = eltContent(priorityListElt, "filename")
-			initPriorityList!(sim, joinpath(sim.inputPath, priorityListFilename))
+			priorityListFilename = joinPathIfNotAbs(sim.inputPath, eltContent(priorityListElt, "filename"))
+			initPriorityList!(sim, priorityListFilename)
 			
 		elseif moveUpModuleName == "zhang_ip"
 			mud.moveUpModule = zhangIpModule
 			zhangIpElt = findElt(moveUpElt, "zhangIp")
+			zhangIpParamsFilename = joinPathIfNotAbs(sim.inputPath, eltContent(zhangIpElt, "paramsFilename"))
 			initZhangIp!(sim;
-				busyFraction = eltContentVal(zhangIpElt, "busyFraction"),
-				travelTimeCost = eltContentVal(zhangIpElt, "travelTimeCost"),
-				maxIdleAmbTravelTime = eltContentVal(zhangIpElt, "maxIdleAmbTravelTime"),
-				maxNumNearestStations = eltContentVal(zhangIpElt, "maxNumNearestStations"))
+				paramsFilename = zhangIpParamsFilename)
+			
+		elseif moveUpModuleName == "temp0"
+			mud.moveUpModule = temp0Module
+			temp0Elt = findElt(moveUpElt, "temp0")
+			initTemp0!(sim;
+				busyFraction = eltContentVal(temp0Elt, "busyFraction"),
+				travelTimeCost = eltContentVal(temp0Elt, "travelTimeCost"),
+				maxIdleAmbTravelTime = eltContentVal(temp0Elt, "maxIdleAmbTravelTime"),
+				maxNumNearestStations = eltContentVal(temp0Elt, "maxNumNearestStations"))
 			
 		elseif moveUpModuleName == "temp1"
 			mud.moveUpModule = temp1Module
@@ -334,7 +363,7 @@ function initSimulation(configFilename::String;
 		
 		initTime(t)
 		
-		println("using move up module: ", moveUpModuleName)
+		doPrint && println("using move up module: ", moveUpModuleName)
 	end
 	
 	##################
@@ -344,11 +373,16 @@ function initSimulation(configFilename::String;
 		sim.resim.use = eltContentVal(rootElt, "resim")
 		if sim.resim.use
 			initMessage(t, "")
-			initResimulation!(sim)
-			print("initialised resimulation")
+			initResim!(sim)
+			doPrint && print("initialised resimulation")
 			initTime(t)
 		end
 	end
+	
+	##################
+	# misc
+	
+	sim.initialised = true # at this point, the simulation could be run
 	
 	##################
 	# sim backup
@@ -368,9 +402,9 @@ function initAmbulance!(sim::Simulation, ambulance::Ambulance;
 	wakeUpTime::Float = nullTime)
 	wakeUpTime = (wakeUpTime == nullTime ? sim.startTime : wakeUpTime)
 	
-	assert(ambulance.index != nullIndex)
-	assert(ambulance.stationIndex != nullIndex)
-	assert(sim.startTime <= wakeUpTime)
+	@assert(ambulance.index != nullIndex)
+	@assert(ambulance.stationIndex != nullIndex)
+	@assert(sim.startTime <= wakeUpTime)
 	
 	ambulance.status = ambSleeping
 	# ambulance.stationIndex

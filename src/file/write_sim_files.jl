@@ -1,3 +1,18 @@
+##########################################################################
+# Copyright 2017 Samuel Ridler.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+##########################################################################
+
 # write sim object and output files
 
 function writeAmbsFile(filename::String, ambulances::Vector{Ambulance})
@@ -6,12 +21,14 @@ function writeAmbsFile(filename::String, ambulances::Vector{Ambulance})
 	writeTablesToFile(filename, table)
 end
 
-function writeArcsFile(filename::String, arcs::Vector{Arc}, travelTimes::Array{Float}, arcForm::String)
-	assert(arcForm == "directed" || arcForm == "undirected")
-	numModes = size(travelTimes,2)
+function writeArcsFile(filename::String, arcs::Vector{Arc}, travelTimes::Array{Float,2}, arcForm::String)
+	@assert(arcForm == "directed" || arcForm == "undirected")
+	numModes = size(travelTimes,1)
 	miscTable = Table("miscData", ["arcForm", "numModes"]; rows = [[arcForm, numModes]])
-	arcsTable = Table("arcs", vcat("index", "fromNode", "toNode", ["mode_$i" for i = 1:numModes]);
-		rows = [vcat(a.index, a.fromNodeIndex, a.toNodeIndex, travelTimes[a.index,:]...) for a in arcs])
+	mainHeaders = ["index", "fromNode", "toNode", ["mode_$i" for i = 1:numModes]...]
+	fieldNames = setdiff(collect(keys(arcs[1].fields)), mainHeaders) # assume fields are same for all arcs
+	arcsTable = Table("arcs", [mainHeaders..., fieldNames...];
+		rows = [vcat(a.index, a.fromNodeIndex, a.toNodeIndex, travelTimes[:,a.index]..., [a.fields[f] for f in fieldNames]...) for a in arcs])
 	writeTablesToFile(filename, [miscTable, arcsTable])
 end
 
@@ -20,6 +37,40 @@ function writeCallsFile(filename::String, startTime::Float, calls::Vector{Call})
 	callsTable = Table("calls", ["index", "priority", "x", "y", "arrivalTime", "dispatchDelay", "onSceneDuration", "transfer", "hospitalIndex", "transferDuration"];
 		rows = [[c.index, Int(c.priority), c.location.x, c.location.y, c.arrivalTime, c.dispatchDelay, c.onSceneDuration, Int(c.transfer), c.hospitalIndex, c.transferDuration] for c in calls])
 	writeTablesToFile(filename, [miscTable, callsTable])
+end
+
+function writeDemandFile(filename::String, demand::Demand)
+	demandRastersTable = Table("demandRasters", ["rasterIndex", "rasterFilename"];
+		rows = [[i, demand.rasterFilenames[i]] for i = 1:demand.numRasters])
+	
+	demandModesTable = Table("demandModes", ["modeIndex", "rasterIndex", "priority", "arrivalRate"];
+		rows = [[m.index, m.rasterIndex, string(m.priority), m.arrivalRate] for m in demand.modes])
+	@assert(all(i -> demand.modes[i].index == i, 1:demand.numModes))
+	
+	# demand sets table
+	dml = demand.modeLookup # shorthand
+	@assert(size(dml) == (demand.numSets, numPriorities)) # should have value for each combination of demand mode and priority
+	demandSetsTable = Table("demandSets", ["setIndex", "modeIndices"];
+		rows = [[i, hcat(dml[i,:]...)] for i = 1:demand.numSets])
+	
+	# demand sets timing table
+	startTimes = demand.setsStartTimes # shorthand
+	setIndices = demand.setsTimeOrder # shorthand
+	demandSetsTimingTable = Table("demandSetsTiming", ["startTime", "setIndex"];
+		rows = [[startTimes[i], setIndices[i]] for i = 1:length(startTimes)])
+	
+	writeTablesToFile(filename, [demandRastersTable, demandModesTable, demandSetsTable, demandSetsTimingTable])
+end
+
+function writeDemandCoverageFile(filename::String, demandCoverage::DemandCoverage)
+	dc = demandCoverage # shorthand
+	coverTimesTable = Table("coverTimes", ["demandPriority", "coverTime"];
+		rows = [[string(priority), coverTime] for (priority, coverTime) in dc.coverTimes])
+	
+	demandRasterCellNumPointsTable = Table("demandRasterCellNumPoints", ["rows", "cols"];
+		rows = [[dc.rasterCellNumRows, dc.rasterCellNumCols]])
+	
+	writeTablesToFile(filename, [coverTimesTable, demandRasterCellNumPointsTable])
 end
 
 function writeHospitalsFile(filename::String, hospitals::Vector{Hospital})
@@ -35,13 +86,15 @@ function writeMapFile(filename::String, map::Map)
 end
 
 function writeNodesFile(filename::String, nodes::Vector{Node})
-	table = Table("nodes", ["index", "x", "y", "offRoadAccess"];
-		rows = [[n.index, n.location.x, n.location.y, Int(n.offRoadAccess)] for n in nodes])
+	mainHeaders = ["index", "x", "y", "offRoadAccess"]
+	fieldNames = setdiff(collect(keys(nodes[1].fields)), mainHeaders) # assume fields are same for all nodes
+	table = Table("nodes", [mainHeaders..., fieldNames...];
+		rows = [[n.index, n.location.x, n.location.y, Int(n.offRoadAccess), [n.fields[f] for f in fieldNames]...] for n in nodes])
 	writeTablesToFile(filename, table)
 end
 
 function writeRNetTravelsFile(filename::String, rNetTravels::Vector{NetTravel})
-	assert(all([rNetTravel.isReduced for rNetTravel in rNetTravels]))
+	@assert(all([rNetTravel.isReduced for rNetTravel in rNetTravels]))
 	serializeToFile(filename, rNetTravels)
 end
 
@@ -64,7 +117,7 @@ function writeTravelFile(filename::String, travel::Travel)
 	
 	# travel sets table
 	tml = travel.modeLookup # shorthand
-	assert(size(tml) == (length(travel.modes), 3)) # should have value for each combination of travel mode and priority
+	@assert(size(tml) == (length(travel.modes), numPriorities)) # should have value for each combination of travel mode and priority
 	travelSetsTable = Table("travelSets", ["travelSetIndex", "priority", "travelModeIndex"];
 		rows = [[ind2sub(tml,i)[1], string(Priority(ind2sub(tml,i)[2])), tml[i]] for i = 1:length(tml)])
 	
@@ -160,23 +213,23 @@ function writeStatsFiles!(sim::Simulation)
 		rows = [[h.index, h.numTransfers] for h in sim.hospitals]))
 end
 
-# write deployment policies to file
-function writeDeploymentPoliciesFile(filename::String, depols::Vector{Depol}, numStations::Int)
-	numAmbs = length(depols[1])
-	assert(numStations >= maximum([maximum(d) for d in depols]))
-	numDepols = length(depols)
+# write deployments to file
+function writeDeploymentsFile(filename::String, deployments::Vector{Deployment}, numStations::Int)
+	numAmbs = length(deployments[1])
+	@assert(numStations >= maximum([maximum(d) for d in deployments]))
+	numDeployments = length(deployments)
 	
-	miscTable = Table("miscData", ["numStations", "numDepols"]; rows = [[numStations, numDepols]])
-	deploymentPoliciesTable = Table("deploymentPolicies",
-		["ambIndex", ["policy_$i stationIndex" for i = 1:numDepols]...];
-		cols = [collect(1:numAmbs), depols...])
-	writeTablesToFile(filename, [miscTable, deploymentPoliciesTable])
+	miscTable = Table("miscData", ["numStations", "numDeployments"]; rows = [[numStations, numDeployments]])
+	deploymentsTable = Table("deployments",
+		["ambIndex", ["deployment_$i stationIndex" for i = 1:numDeployments]...];
+		cols = [collect(1:numAmbs), deployments...])
+	writeTablesToFile(filename, [miscTable, deploymentsTable])
 end
 
 # save batch mean response times to file
 function writeBatchMeanResponseTimesFile(filename::String, batchMeanResponseTimes::Array{Float,2};
 	batchTime = nullTime, startTime = nullTime, endTime = nullTime, responseTimeUnits::String = "minutes")
-	assert(batchTime != nullTime && startTime != nullTime && endTime != nullTime)
+	@assert(batchTime != nullTime && startTime != nullTime && endTime != nullTime)
 	x = batchMeanResponseTimes # shorthand
 	(numRows, numCols) = size(x) # numRows = numSims, numCols = numBatches
 	miscTable = Table("misc_data",

@@ -1,8 +1,23 @@
+##########################################################################
+# Copyright 2017 Samuel Ridler.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+##########################################################################
+
 # miscellaneous initialisiations for graph
 function initGraph!(graph::Graph)
 	# should already have nodes, arcs
 	numNodes = length(graph.nodes)
-	assert(numNodes > 0 && length(graph.arcs) > 0)
+	@assert(numNodes > 0 && length(graph.arcs) > 0)
 	
 	graph.light = LightGraphs.DiGraph(numNodes) # create LightGraph version of graph
 	for arc in graph.arcs
@@ -13,7 +28,7 @@ function initGraph!(graph::Graph)
 	if !graph.isReduced
 		graph.nodePairArcIndex = spzeros(Int, numNodes, numNodes) # sparse, to save on memory
 		for arc in graph.arcs
-			assert(graph.nodePairArcIndex[arc.fromNodeIndex, arc.toNodeIndex] == 0) # check that there is only one arc for this ordered node pair
+			@assert(graph.nodePairArcIndex[arc.fromNodeIndex, arc.toNodeIndex] == 0) # check that there is only one arc for this ordered node pair
 			graph.nodePairArcIndex[arc.fromNodeIndex, arc.toNodeIndex] = arc.index
 		end
 	end
@@ -64,10 +79,10 @@ function checkGraph(graph::Graph, map::Map)
 	
 	# check node and arc indices
 	for i = 1:numNodes
-		assert(nodes[i].index == i)
+		@assert(nodes[i].index == i)
 	end
 	for i = 1:numArcs
-		assert(arcs[i].index == i)
+		@assert(arcs[i].index == i)
 	end
 	
 	# check that nodes are inside map borders

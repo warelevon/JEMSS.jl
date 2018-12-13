@@ -1,6 +1,21 @@
+##########################################################################
+# Copyright 2017 Samuel Ridler.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+##########################################################################
+
 # misc file input/output functions
 
-Base.transpose(s::String) = s # not sure where else to put this
+Base.transpose(s::T) where T <: AbstractString = s # not sure where else to put this
 
 function readDlmFileNextLine!(file::IOStream; delim::Char = delimiter)
 	try
@@ -59,8 +74,8 @@ immutable Table
 		data = convert(Array{Any,2}, data)
 		
 		(numRows, numCols) = size(data)
-		assert(length(header) == numCols)
-		assert(allunique(header))
+		@assert(length(header) == numCols)
+		@assert(allunique(header))
 		
 		headerDict = arrayDict(header)
 		columns = Dict{Any,Vector{Any}}()
@@ -73,7 +88,7 @@ immutable Table
 	end
 	
 	function Table(name, header; rows = [], cols = [])
-		assert(isempty(rows) + isempty(cols) == 1)
+		@assert(isempty(rows) + isempty(cols) == 1)
 		if !isempty(rows)
 			return Table(name, header, ctranspose(hcat(rows...)))
 		elseif !isempty(cols)
@@ -141,8 +156,9 @@ function readTablesFromData(data::Array{Any,2})
 		tableName = data[i,1]
 		
 		# read row and column counts, if given
-		isempty(data[i,2]) ? numRows = nullIndex : numRows = data[i,2]
-		isempty(data[i,3]) ? numCols = nullIndex : numCols = data[i,3]
+		numRows = numCols = nullIndex
+		(size(data,2) >= 2) && !isempty(data[i,2]) && (numRows = data[i,2])
+		(size(data,2) >= 3) && !isempty(data[i,3]) && (numCols = data[i,3])
 		
 		i += 1 # move to table header
 		
@@ -151,7 +167,7 @@ function readTablesFromData(data::Array{Any,2})
 		while j <= numDataCols && !isempty(data[i,j])
 			j += 1
 		end
-		numCols == nullIndex ? numCols = j - 1 : assert(numCols == j - 1)
+		numCols == nullIndex ? numCols = j - 1 : @assert(numCols == j - 1)
 		
 		# read table header
 		tableHeader = data[i,1:numCols]
@@ -163,22 +179,39 @@ function readTablesFromData(data::Array{Any,2})
 		while j <= numDataRows && !isempty(data[j,1])
 			j += 1
 		end
-		numRows == nullIndex ? numRows = j - i : assert(numRows == j - i)
+		numRows == nullIndex ? numRows = j - i : @assert(numRows == j - i)
 		
 		# create table
 		tableData = data[i-1+(1:numRows), 1:numCols]
 		table = Table(convert(String,tableName), tableHeader, tableData)
 		
 		# add table to tables
-		assert(!haskey(tables, table.name))
+		@assert(!haskey(tables, table.name))
 		tables[table.name] = table
 		
 		# go to next table
 		i += numRows # i = j
-		assert(i > numDataRows || isempty(data[i,1]))
+		@assert(i > numDataRows || isempty(data[i,1]))
 	end
 	
 	return tables
+end
+
+# given a table and names of fields from table header to use,
+# return a vector of dicts for each row, with each dict mapping from
+# a field name to the value for that row and field
+function tableRowsFieldDicts(table::Table, fieldNames::Vector{T}) where T
+	fieldNames = convert(Vector{String}, fieldNames)
+	fieldsDict = Dict{String,Any}([f => nothing for f in fieldNames])
+	numRows = size(table.data, 1)
+	rowsFieldDicts = [deepcopy(fieldsDict) for i = 1:numRows] # rowsFieldDicts[i] = dict with fieldName => table.data[i,table.headerDict[fieldName]] for fieldName in fieldNames
+	for fieldName in fieldNames
+		j = table.headerDict[fieldName]
+		for i = 1:numRows
+			rowsFieldDicts[i][fieldName] = table.data[i,j]
+		end
+	end
+	return rowsFieldDicts
 end
 
 # crc checksum
@@ -213,6 +246,8 @@ eltContent(parentElt::XMLElement, eltString::String) = try content(findElt(paren
 	catch error("Element not found: $eltString"); end
 eltContentVal(parentElt::XMLElement, eltString::String) = eval(parse(eltContent(parentElt, eltString)))
 eltContentInterpVal(parentElt::XMLElement, eltString::String) = interpolateString(eltContent(parentElt, eltString))
+eltAttr = attribute
+eltAttrVal(elt::XMLElement, attrString::String) = eval(parse(eltAttr(elt, attrString)))
 
 function childrenNodeNames(parentElt::XMLElement)
 	childNodes = Vector{String}(0)

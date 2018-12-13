@@ -1,71 +1,17 @@
-# read geographic data from file and apply f to data
-function readGeoFile(f::Function, filename::String)
-	return ArchGDAL.registerdrivers() do
-		ArchGDAL.read(filename) do dataset
-			f(dataset)
-		end
-	end
-end
-
-# read raster file using ArchGDAL package, return as custom Raster type
-function readRasterFile(rasterFilename::String)
-	
-	# open raster, get data, close raster
-	# only gets first raster band, may change this later
-	(geoTransform, z) = readGeoFile(rasterFilename) do dataset
-		rasterband = ArchGDAL.getband(dataset, 1)
-		return (ArchGDAL.getgeotransform(dataset), ArchGDAL.read(rasterband))
-	end
-	
-	# shorthand:
-	(nx, ny) = size(z) # number of cells in x and y directions
-	(x1, dxdi, dxdj, y1, dydi, dydj) = geoTransform # dxdi is change in x per change in index i, for z[i,j]; likewise for dxdj, dydi, dydj
-	dx = dxdi # width of cells in x direction
-	dy = dydj # height of cells in y direction (may be negative)
-	
-	# data checks
-	assert(dxdj == 0 && dydi == 0) # otherwise raster is sloping, so changing x index changes y value, and vice-versa
-	assert(dx > 0)
-	assert(dy != 0)
-	
-	# convert data for easier use
-	# find x and y vectors to represent raster cell centres, make sure values are increasing
-	xMin = x1 + 0.5*dx # we know dx > 0
-	# (xMin, dx, z) = (dx > 0) ? (x1 + 0.5*dx, dx, z) : (x1 + (nx-0.5)*dx, -dx, flipdim(z,1))
-	(yMin, dy, z) = (dy > 0) ? (y1 + 0.5*dy, dy, z) : (y1 + (ny-0.5)*dy, -dy, flipdim(z,2))
-	x = collect(range(xMin, dx, nx))
-	y = collect(range(yMin, dy, ny))
-	
-	return Raster(x, y, z)
-end
-
-# For reading raster stored in jld file, with x, y, and z variables,
-# where x and y values are coordinates (each sorted by increasing value)
-# and x[i], y[j] corresponds with cell value z[i,j] ((length(x), length(y)) == size(z))
-function readJldRasterFile(rasterFilename::String)
-	# open and read file
-	assert(isfile(rasterFilename))
-	data = JLD.load(rasterFilename)
-	raster = Raster(data["x"], data["y"], data["z"])
-	
-	# check data
-	
-	# z[i,j] should correspond with x[i], y[j]
-	assert((length(raster.x), length(raster.y)) == size(raster.z))
-	
-	# x and y values should increase with index
-	assert(issorted(raster.x, lt = <))
-	assert(issorted(raster.y, lt = <))
-	
-	# check that x and y values have (roughly) constant step sizes
-	for (v, dv) in [(raster.x, raster.dx), (raster.y, raster.dy)]
-		if length(v) > 1
-			assert(maximum(abs(v[1:end-1] - (v[2:end] - dv))) .<= eps() * maximum(abs(v)))
-		end
-	end
-	
-	return raster
-end
+##########################################################################
+# Copyright 2017 Samuel Ridler.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+##########################################################################
 
 # crop raster borders to fit in map borders, return true if successful, false otherwise
 # mutates: raster
@@ -119,7 +65,7 @@ end
 
 function rasterZIndexToXYIndices(raster::Raster, i::Int)
 	# return (x,y) indices for raster.z[i]
-	assert(1 <= i && i <= length(raster.z)) # ind2sub does not check this
+	@assert(1 <= i && i <= length(raster.z)) # ind2sub does not check this
 	return ind2sub(raster.z, i)
 end
 

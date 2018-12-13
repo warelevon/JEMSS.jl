@@ -1,3 +1,18 @@
+##########################################################################
+# Copyright 2017 Samuel Ridler.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+##########################################################################
+
 # for generating simulation objects based on a config file
 
 type GenConfig
@@ -34,6 +49,7 @@ type GenConfig
 	targetResponseTime::Float
 	offRoadSpeed::Float
 	stationCapacity::Int
+	travelModeSpeeds::Vector{Float}
 	
 	# call density raster
 	callDensityRasterFilename::String
@@ -62,7 +78,7 @@ type GenConfig
 		nullIndex, nullIndex, nullIndex, nullIndex,
 		nullIndex, nullIndex,
 		Map(), 1e-6,
-		nullTime, nullTime, nullTime, nullIndex,
+		nullTime, nullTime, nullTime, nullIndex, [],
 		"", false, nullIndex, nullIndex)
 end
 
@@ -104,7 +120,7 @@ function readGenConfig(genConfigFilename::String)
 	map.yMax = eltContentVal(mapElt, "yMax")
 	map.yScale = eltContentVal(mapElt, "yScale")
 	map.yRange = map.yMax - map.yMin
-	assert(map.xRange > 0 && map.yRange > 0)
+	@assert(map.xRange > 0 && map.yRange > 0)
 	genConfig.map = map
 	
 	# call distributions and random number generators
@@ -136,10 +152,12 @@ function readGenConfig(genConfigFilename::String)
 	
 	# misc values
 	genConfig.startTime = eltContentVal(simElt, "startTime")
-	assert(genConfig.startTime >= 0)
+	@assert(genConfig.startTime >= 0)
 	genConfig.targetResponseTime = eltContentVal(simElt, "targetResponseTime")
 	genConfig.offRoadSpeed = eltContentVal(simElt, "offRoadSpeed") # km / day
 	genConfig.stationCapacity = eltContentVal(simElt, "stationCapacity")
+	travelModeSpeedsElt = findElt(simElt, "travelModeSpeeds")
+	genConfig.travelModeSpeeds = (travelModeSpeedsElt == nothing ? [1.5 * genConfig.offRoadSpeed] : eltContentVal(travelModeSpeedsElt))
 	
 	# call gen parameters
 	# call density raster
@@ -164,29 +182,29 @@ function readGenConfig(genConfigFilename::String)
 	return genConfig
 end
 
-function runGenConfig(genConfigFilename::String; overwriteOutputPath::Bool = false)
+function runGenConfig(genConfigFilename::String; overwriteOutputPath::Bool = false, doPrint::Bool = true)
 	genConfig = readGenConfig(genConfigFilename)
 	
 	if isdir(genConfig.outputPath) && !overwriteOutputPath
-		println("Output path already exists: ", genConfig.outputPath)
-		print("Delete folder contents and continue anyway? (y = yes): ")
+		doPrint && println("Output path already exists: ", genConfig.outputPath)
+		doPrint && print("Delete folder contents and continue anyway? (y = yes): ")
 		response = chomp(readline())
 		if response != "y"
-			println("stopping")
+			doPrint && println("stopping")
 			return
 		else
 			overwriteOutputPath = true
 		end
 	end
 	if isdir(genConfig.outputPath) && overwriteOutputPath
-		println("Deleting folder contents: ", genConfig.outputPath)
+		doPrint && println("Deleting folder contents: ", genConfig.outputPath)
 		rm(genConfig.outputPath; recursive=true)
 	end
 	if !isdir(genConfig.outputPath)
 		mkdir(genConfig.outputPath)
 	end
 	
-	println("Generation mode: ", genConfig.mode)
+	doPrint && println("Generation mode: ", genConfig.mode)
 	if genConfig.mode == "all"
 		# make all
 		ambulances = makeAmbs(genConfig)
@@ -200,18 +218,18 @@ function runGenConfig(genConfigFilename::String; overwriteOutputPath::Bool = fal
 		(arcs, travelTimes) = makeArcs(genConfig, graph, nodes)
 		
 		# save all
-		println("Saving output to: ", genConfig.outputPath)
+		doPrint && println("Saving output to: ", genConfig.outputPath)
 		writeAmbsFile(genConfig.ambsFilename, ambulances)
 		writeArcsFile(genConfig.arcsFilename, arcs, travelTimes, "undirected")
 		writeCallsFile(genConfig.callsFilename, genConfig.startTime, calls)
 		writeHospitalsFile(genConfig.hospitalsFilename, hospitals)
 		writeMapFile(genConfig.mapFilename, genConfig.map)
 		writeNodesFile(genConfig.nodesFilename, nodes)
-		writePrioritiesFile(genConfig.prioritiesFilename, repmat([genConfig.targetResponseTime],3))
+		writePrioritiesFile(genConfig.prioritiesFilename, repmat([genConfig.targetResponseTime],numPriorities))
 		writeStationsFile(genConfig.stationsFilename, stations)
 		writeTravelFile(genConfig.travelFilename, travel)
 	elseif genConfig.mode == "calls"
-		runGenConfigCalls(genConfig)
+		runGenConfigCalls(genConfig, doPrint = doPrint)
 	else
 		error("Unrecognised generation mode")
 	end
@@ -219,22 +237,22 @@ end
 
 # generate calls, and generate locations using call density raster file (file name stored in genConfig)
 # raster may be cropped to be within map borders
-function runGenConfigCalls(genConfig::GenConfig)
+function runGenConfigCalls(genConfig::GenConfig; doPrint::Bool = true)
 	
 	calls = makeCalls(genConfig) # will later overwrite location field values for each call
 	numCalls = length(calls) # shorthand
 	
 	# read call density raster file
-	println("Reading raster file: ", genConfig.callDensityRasterFilename)
+	doPrint && println("Reading raster file: ", genConfig.callDensityRasterFilename)
 	raster = readRasterFile(genConfig.callDensityRasterFilename)
 	
 	if genConfig.cropRaster
 		# crop raster to be within genConfig.map
-		println("Before cropping:")
+		doPrint && println("Before cropping:")
 		printRasterSize(raster)
 		mapTrimmed = trimmedMap(genConfig.map, genConfig.mapTrim)
 		if cropRaster!(raster, mapTrimmed)
-			println("After cropping:")
+			doPrint && println("After cropping:")
 			printRasterSize(raster)
 		end
 	end
@@ -245,7 +263,7 @@ function runGenConfigCalls(genConfig::GenConfig)
 		calls[i].location = randLocations[i]
 	end
 	
-	println("Saving calls file to: ", genConfig.callsFilename)
+	doPrint && println("Saving calls file to: ", genConfig.callsFilename)
 	writeCallsFile(genConfig.callsFilename, genConfig.startTime, calls)
 end
 
@@ -261,11 +279,11 @@ function makeAmbs(genConfig::GenConfig)
 end
 
 function makeArcs(genConfig::GenConfig, graph::LightGraphs.Graph, nodes::Vector{Node})
+	numTravelModes = length(genConfig.travelModeSpeeds)
+	@assert(numTravelModes >= 1)
+	
 	arcs = Vector{Arc}(graph.ne)
-	
-	speed = 1.5 * genConfig.offRoadSpeed
-	
-	travelTimes = Vector{Float}(length(arcs))
+	travelTimes = Array{Float,2}(numTravelModes,length(arcs))
 	
 	i = 1
 	for edge in LightGraphs.edges(graph)
@@ -273,10 +291,12 @@ function makeArcs(genConfig::GenConfig, graph::LightGraphs.Graph, nodes::Vector{
 		arcs[i].index = i
 		arcs[i].fromNodeIndex = edge.src
 		arcs[i].toNodeIndex = edge.dst
-		
-		dist = normDist(genConfig.map, nodes[edge.src].location, nodes[edge.dst].location)
-		travelTimes[i] = dist / speed * rand(genConfig.travelTimeFactorDistrRng)
 		i = i + 1
+	end
+	
+	for i = 1:numTravelModes, arc in arcs
+		dist = normDist(genConfig.map, nodes[arc.fromNodeIndex].location, nodes[arc.toNodeIndex].location)
+		travelTimes[i,arc.index] = dist / genConfig.travelModeSpeeds[i] * rand(genConfig.travelTimeFactorDistrRng)
 	end
 	
 	return arcs, travelTimes
@@ -353,9 +373,8 @@ function makeTravel(genConfig::GenConfig)
 	travel.numModes = length(travel.modes)
 	
 	# use single travel mode in single travel mode set
-	# all three travel priorities should be used
 	travel.numSets = 1
-	travel.modeLookup = repmat([1],1,3) # modeLookup[setIndex, priority] gives travelModeIndex
+	travel.modeLookup = repmat([1],1,numPriorities) # modeLookup[setIndex, priority] gives travelModeIndex
 	
 	travel.setsStartTimes = [genConfig.startTime]
 	travel.setsTimeOrder = [1]

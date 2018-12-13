@@ -1,8 +1,23 @@
+##########################################################################
+# Copyright 2017 Samuel Ridler.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+##########################################################################
+
 # load the resimulation data from the events file
 # changes sim.resim.use to be false unless all checks are passed
-function initResimulation!(sim::Simulation)
+function initResim!(sim::Simulation)
 	resim = sim.resim # shorthand
-	assert(resim.use)
+	@assert(resim.use)
 	resim.use = false # until checks have passed
 	
 	eventsFilename = sim.outputFiles["events"].path
@@ -39,18 +54,18 @@ function initResimulation!(sim::Simulation)
 	resim.events = events
 	resim.eventsChildren = eventsChildren
 	resim.prevEventIndex = 0
-	resim.timeTolerance = 1e-5 / 2 + 10*eps()
+	resim.timeTolerance = 1e-5 / 2
 end
 
 function resimCheckCurrentEvent!(sim::Simulation, event::Event)
 	resim = sim.resim # shorthand
-	assert(resim.use)
+	@assert(resim.use)
 	
 	resim.prevEventIndex += 1 # go to event after previous (should be current)
 	
 	resimEvent = resim.events[resim.prevEventIndex] # shorthand
 	eventsMatch = true
-	if abs(event.time - resimEvent.time) > resim.timeTolerance
+	if !isapprox(event.time, resimEvent.time; rtol = eps(Float), atol = resim.timeTolerance)
 		println("mismatching event time")
 		eventsMatch = false
 	elseif event.form != resimEvent.form
@@ -77,17 +92,17 @@ end
 # assumes ambulance mobilisation delay is 0
 function resimFindAmbToDispatch(sim::Simulation, call::Call)
 	resim = sim.resim # shorthand
-	assert(resim.use)
+	@assert(resim.use)
 	
 	# check that previous event was to dispatch for this call
 	resimEvent = resim.events[resim.prevEventIndex]
-	assert(resimEvent.form == considerDispatch)
-	assert(resimEvent.callIndex == call.index)
+	@assert(resimEvent.form == considerDispatch)
+	@assert(resimEvent.callIndex == call.index)
 	
 	# find child event for dispatch
 	eventChildren = resim.eventsChildren[resimEvent.index]
 	dispatchEvents = filter(event -> event.form == ambDispatched, eventChildren)
-	assert(length(dispatchEvents) <= 1)
+	@assert(length(dispatchEvents) <= 1)
 	ambIndex = nullIndex
 	if length(dispatchEvents) == 1
 		ambIndex = dispatchEvents[1].ambIndex
@@ -100,18 +115,18 @@ end
 # assumes ambulance move up delay is 0
 function resimMoveUp(sim::Simulation)
 	resim = sim.resim # shorthand
-	assert(resim.use)
+	@assert(resim.use)
 	
 	# check that previous event was to consider move up
 	resimEvent = resim.events[resim.prevEventIndex]
-	assert(resimEvent.form == considerMoveUp)
+	@assert(resimEvent.form == considerMoveUp)
 	
 	# find all ambulances to move up
 	movableAmbs = Vector{Ambulance}(0)
 	ambStations = Vector{Station}(0)
 	eventChildren = resim.eventsChildren[resimEvent.index]
 	for event in reverse(eventChildren)
-		assert(event.form == ambMoveUp)
+		@assert(event.form == ambMoveUp)
 		push!(movableAmbs, sim.ambulances[event.ambIndex])
 		push!(ambStations, sim.stations[event.stationIndex])
 	end
